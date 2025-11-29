@@ -1,0 +1,27 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Training outputs and logs
+training*.log
+outputs/
+grpo_saved_lora/
+grpo_trainer_lora_model/
+unsloth_training_checkpoints/
+
+# Compiled cache
+unsloth_compiled_cache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

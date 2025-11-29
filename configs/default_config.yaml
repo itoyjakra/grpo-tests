@@ -1,0 +1,109 @@
+# Default configuration for LLM Fine-Tuning Pipeline
+# This file contains all configurable parameters for SFT and GRPO training
+
+# Model Configuration
+model:
+  model_name: "unsloth/Qwen3-4B-Base"
+  max_seq_length: 2048
+  lora_rank: 32
+  lora_alpha: 64  # Typically rank * 2
+  load_in_4bit: false
+  fast_inference: true
+  gpu_memory_utilization: 0.7  # Reduced from 0.9 to leave room for GRPO training
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  use_gradient_checkpointing: "unsloth"
+  random_state: 3407
+
+# Data Configuration
+data:
+  sft_dataset_name: "unsloth/OpenMathReasoning-mini"
+  sft_dataset_split: "cot"
+  grpo_dataset_name: "open-r1/DAPO-Math-17k-Processed"
+  grpo_dataset_split: "train"
+  grpo_dataset_config: "en"
+  max_length_percentile: 90  # Filter prompts by 90th percentile
+  truncate_ratio: 0.5  # Keep sequences <= max_seq_length * 0.5 for SFT
+  filter_numeric_only: true  # Filter SFT to numeric answers only
+
+# Prompt Configuration
+prompt:
+  reasoning_start: "<start_working_out>"
+  reasoning_end: "<end_working_out>"
+  solution_start: "<SOLUTION>"
+  solution_end: "</SOLUTION>"
+  system_prompt_template: |
+    You are given a problem.
+    Think about the problem and provide your working out.
+    Place it between {reasoning_start} and {reasoning_end}.
+    Then, provide your solution between {solution_start}{solution_end}
+
+# SFT Training Configuration
+sft_training:
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 1
+  warmup_steps: 5
+  num_train_epochs: 2
+  learning_rate: 0.0002  # 2e-4
+  logging_steps: 5
+  optim: "adamw_8bit"
+  weight_decay: 0.001
+  lr_scheduler_type: "linear"
+  seed: 3407
+  output_dir: "outputs/sft"
+  save_steps: 100
+  report_to: "none"  # Options: "none", "wandb", "tensorboard"
+
+# GRPO Training Configuration
+grpo_training:
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 2  # Increased to reduce memory footprint
+  num_generations: 2  # Reduced from 4 to save memory
+  max_steps: 100  # Initial training; increase for production
+  learning_rate: 0.000005  # 5e-6 (much lower than SFT)
+  weight_decay: 0.001
+  warmup_ratio: 0.1
+  lr_scheduler_type: "linear"
+  optim: "adamw_8bit"
+  logging_steps: 1  # Verbose logging for monitoring
+  save_steps: 100
+  output_dir: "outputs/grpo"
+  report_to: "none"
+  eval_strategy: "no"  # Options: "no", "steps", "epoch"
+  eval_steps: null
+
+# vLLM Sampling Configuration (for GRPO generation)
+vllm_sampling:
+  temperature: 1.0
+  top_p: 1.0
+  top_k: -1  # Disabled
+  min_p: 0.1
+  seed: 3407
+  include_stop_str_in_output: true
+
+# Reward Function Configuration
+reward:
+  use_format_exact: true  # +3.0 for exact format match
+  use_format_approximate: true  # +0.5 per tag (max +1.5)
+  use_answer_check: true  # -2.0 to +5.0 based on answer correctness
+  use_number_check: true  # Alternative numerical checking
+  print_every_steps: 0  # Print debug info every N steps (0 = never)
+
+# Evaluation Configuration
+evaluation:
+  num_test_problems: 5
+  temperature: 1.0
+  top_k: 50
+  max_new_tokens: 2048
+  test_problems: null  # Optional list of custom test problems
+
+# Pipeline Control
+skip_sft: false  # Skip SFT pre-training phase
+skip_grpo: false  # Skip GRPO training phase
+save_path: "grpo_saved_lora"  # Final model save path
