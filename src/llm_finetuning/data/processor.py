@@ -130,7 +130,8 @@ class DatasetProcessor:
     def process_grpo_dataset(
         self,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizer
+        tokenizer: PreTrainedTokenizer,
+        system_prompt: str = None
     ) -> tuple[Dataset, int, int]:
         """Process GRPO dataset and calculate sequence length constraints.
 
@@ -140,6 +141,7 @@ class DatasetProcessor:
         Args:
             dataset: HuggingFace Dataset with 'prompt' field
             tokenizer: Tokenizer for length calculation
+            system_prompt: Optional system prompt to include in messages
 
         Returns:
             Tuple of (filtered_dataset, max_prompt_length, max_completion_length)
@@ -157,8 +159,13 @@ class DatasetProcessor:
 
         def tokenize_prompt(example: Dict[str, Any]) -> Dict[str, Any]:
             """Tokenize a single prompt."""
+            messages = []
+            if system_prompt is not None:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": example["prompt"]})
+
             tokens = tokenizer.apply_chat_template(
-                [{"role": "user", "content": example["prompt"]}],
+                messages,
                 tokenize=True,
                 add_generation_prompt=True
             )
@@ -207,12 +214,64 @@ class DatasetProcessor:
             f"  total: {self.model_config.max_seq_length}"
         )
 
+        # Transform prompt field to message format for GRPO
+        if system_prompt is not None:
+            logger.info("Transforming prompts to message format with system prompt...")
+            def transform_to_messages(example: Dict[str, Any]) -> Dict[str, Any]:
+                """Transform prompt string to list of message dictionaries."""
+                example["prompt"] = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": example["prompt"]},
+                ]
+                return example
+
+            dataset = dataset.map(transform_to_messages, desc="Converting to message format")
+            logger.info("Prompts transformed to include system prompt")
+
         # Rename 'solution' to 'answer' for GRPO trainer compatibility
         if "solution" in dataset.column_names and "answer" not in dataset.column_names:
             dataset = dataset.rename_column("solution", "answer")
             logger.info("Renamed 'solution' column to 'answer' for GRPO compatibility")
 
         return dataset, max_prompt_length, max_completion_length
+
+    def split_dataset(
+        self,
+        dataset: Dataset,
+        train_ratio: float = 0.9,
+        seed: int = 42
+    ) -> tuple[Dataset, Dataset]:
+        """Split dataset into train and validation sets.
+
+        Args:
+            dataset: Dataset to split
+            train_ratio: Ratio of data to use for training (default: 0.9)
+            seed: Random seed for reproducibility
+
+        Returns:
+            Tuple of (train_dataset, eval_dataset)
+        """
+        # Calculate split size
+        total_size = len(dataset)
+        train_size = int(total_size * train_ratio)
+
+        # Split using dataset's train_test_split method
+        split_dataset = dataset.train_test_split(
+            train_size=train_size,
+            seed=seed
+        )
+
+        train_dataset = split_dataset["train"]
+        eval_dataset = split_dataset["test"]
+
+        logger.info(
+            f"Dataset split:\n"
+            f"  Total examples: {total_size}\n"
+            f"  Training: {len(train_dataset)} ({train_ratio * 100:.0f}%)\n"
+            f"  Validation: {len(eval_dataset)} ({(1 - train_ratio) * 100:.0f}%)"
+        )
+
+        return train_dataset, eval_dataset
 
     def _truncate_by_length(
         self,

@@ -65,7 +65,7 @@ grpo_training:
   per_device_train_batch_size: 1
   gradient_accumulation_steps: 2  # Increased to reduce memory footprint
   num_generations: 2  # Reduced from 4 to save memory
-  max_steps: 100  # Initial training; increase for production
+  max_steps: 400  # Initial training; increase for production
   learning_rate: 0.000005  # 5e-6 (much lower than SFT)
   weight_decay: 0.001
   warmup_ratio: 0.1
@@ -75,16 +75,17 @@ grpo_training:
   save_steps: 100
   output_dir: "outputs/grpo"
   report_to: "none"
-  eval_strategy: "no"  # Options: "no", "steps", "epoch"
-  eval_steps: null
+  eval_strategy: "steps"  # Options: "no", "steps", "epoch"
+  eval_steps: 50  # Evaluate every 20 steps
+  train_validation_split: 0.995  # 90% train, 10% validation
 
 # vLLM Sampling Configuration (for GRPO generation)
 vllm_sampling:
-  temperature: 1.0
-  top_p: 1.0
+  temperature: 1.2  # Increased for more diversity
+  top_p: 0.95  # Slightly restricted to avoid gibberish
   top_k: -1  # Disabled
-  min_p: 0.1
-  seed: 3407
+  min_p: 0.05  # Lowered to allow more token choices
+  seed: 42  # Different seed per run would be ideal, but fixed seed is OK
   include_stop_str_in_output: true
 
 # Reward Function Configuration
@@ -93,7 +94,7 @@ reward:
   use_format_approximate: true  # +0.5 per tag (max +1.5)
   use_answer_check: true  # -2.0 to +5.0 based on answer correctness
   use_number_check: true  # Alternative numerical checking
-  print_every_steps: 0  # Print debug info every N steps (0 = never)
+  print_every_steps: 1  # Print debug info every 1 step to diagnose issues
 
 # Evaluation Configuration
 evaluation:

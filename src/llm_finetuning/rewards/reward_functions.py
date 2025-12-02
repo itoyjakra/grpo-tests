@@ -67,7 +67,7 @@ class RewardFunctionManager:
 
     def match_format_exactly(
         self,
-        completions: List[str],
+        completions: List[List[Dict[str, str]]],
         **kwargs
     ) -> List[float]:
         """Check if completions match the exact expected format.
@@ -76,7 +76,7 @@ class RewardFunctionManager:
         <reasoning_start>...<reasoning_end><solution_start>...<solution_end>
 
         Args:
-            completions: List of model-generated completions
+            completions: List of completion message lists (each is [{"role": "assistant", "content": "..."}])
             **kwargs: Additional arguments (unused)
 
         Returns:
@@ -84,7 +84,9 @@ class RewardFunctionManager:
         """
         rewards = []
         for completion in completions:
-            if self.exact_format_pattern.search(completion):
+            # Extract content from message dict
+            response = completion[0]["content"]
+            if self.exact_format_pattern.search(response):
                 rewards.append(3.0)
             else:
                 rewards.append(0.0)
@@ -92,7 +94,7 @@ class RewardFunctionManager:
 
     def match_format_approximately(
         self,
-        completions: List[str],
+        completions: List[List[Dict[str, str]]],
         **kwargs
     ) -> List[float]:
         """Score completions based on presence of formatting tags.
@@ -104,7 +106,7 @@ class RewardFunctionManager:
         Expected: exactly 1 occurrence each of reasoning_end, solution_start, solution_end
 
         Args:
-            completions: List of model-generated completions
+            completions: List of completion message lists
             **kwargs: Additional arguments (unused)
 
         Returns:
@@ -114,10 +116,13 @@ class RewardFunctionManager:
         for completion in completions:
             reward = 0.0
 
+            # Extract content from message dict
+            response = completion[0]["content"]
+
             # Count occurrences of each tag (excluding reasoning_start which is in prompt)
-            reasoning_end_count = completion.count(self.prompt_components["reasoning_end"])
-            solution_start_count = completion.count(self.prompt_components["solution_start"])
-            solution_end_count = completion.count(self.prompt_components["solution_end"])
+            reasoning_end_count = response.count(self.prompt_components["reasoning_end"])
+            solution_start_count = response.count(self.prompt_components["solution_start"])
+            solution_end_count = response.count(self.prompt_components["solution_end"])
 
             # Award points for correct single occurrences
             if reasoning_end_count == 1:
@@ -140,8 +145,8 @@ class RewardFunctionManager:
 
     def check_answer(
         self,
-        prompts: List[str],
-        completions: List[str],
+        prompts: List[List[Dict[str, str]]],
+        completions: List[List[Dict[str, str]]],
         answer: List[str],
         **kwargs
     ) -> List[float]:
@@ -156,8 +161,8 @@ class RewardFunctionManager:
         - -2.0: Cannot extract answer
 
         Args:
-            prompts: List of prompts (unused, for compatibility)
-            completions: List of model-generated completions
+            prompts: List of prompt message lists
+            completions: List of completion message lists
             answer: List of expected answers
             **kwargs: Additional arguments (unused)
 
@@ -167,12 +172,15 @@ class RewardFunctionManager:
         rewards = []
 
         for i, (completion, expected) in enumerate(zip(completions, answer)):
+            # Extract content from message dict
+            response = completion[0]["content"]
+
             # Try to extract solution from completion
-            match = self.solution_pattern.search(completion)
+            match = self.solution_pattern.search(response)
 
             if not match:
                 rewards.append(-2.0)
-                self._debug_print(i, completion, None, expected, "NO_MATCH")
+                self._debug_print(i, response, None, expected, "NO_MATCH")
                 continue
 
             extracted = match.group(1).strip()
@@ -180,13 +188,13 @@ class RewardFunctionManager:
             # Check for exact match
             if extracted == expected:
                 rewards.append(5.0)
-                self._debug_print(i, completion, extracted, expected, "EXACT")
+                self._debug_print(i, response, extracted, expected, "EXACT")
                 continue
 
             # Check for match with whitespace differences
             if extracted.replace(" ", "") == expected.replace(" ", ""):
                 rewards.append(3.5)
-                self._debug_print(i, completion, extracted, expected, "WHITESPACE")
+                self._debug_print(i, response, extracted, expected, "WHITESPACE")
                 continue
 
             # Try numerical comparison
@@ -198,35 +206,35 @@ class RewardFunctionManager:
                     # Avoid division by zero
                     if extracted_num == 0:
                         rewards.append(5.0)
-                        self._debug_print(i, completion, extracted, expected, "EXACT_ZERO")
+                        self._debug_print(i, response, extracted, expected, "EXACT_ZERO")
                     else:
                         rewards.append(-2.5)
-                        self._debug_print(i, completion, extracted, expected, "WRONG")
+                        self._debug_print(i, response, extracted, expected, "WRONG")
                     continue
 
                 ratio = extracted_num / expected_num
 
                 if 0.9 <= ratio <= 1.1:
                     rewards.append(2.0)
-                    self._debug_print(i, completion, extracted, expected, "CLOSE")
+                    self._debug_print(i, response, extracted, expected, "CLOSE")
                 elif 0.8 <= ratio <= 1.2:
                     rewards.append(1.5)
-                    self._debug_print(i, completion, extracted, expected, "REASONABLE")
+                    self._debug_print(i, response, extracted, expected, "REASONABLE")
                 else:
                     rewards.append(-2.5)
-                    self._debug_print(i, completion, extracted, expected, "WRONG")
+                    self._debug_print(i, response, extracted, expected, "WRONG")
 
             except (ValueError, TypeError):
                 # Cannot convert to number
                 rewards.append(-2.5)
-                self._debug_print(i, completion, extracted, expected, "NON_NUMERIC")
+                self._debug_print(i, response, extracted, expected, "NON_NUMERIC")
 
         return rewards
 
     def check_numbers(
         self,
-        prompts: List[str],
-        completions: List[str],
+        prompts: List[List[Dict[str, str]]],
+        completions: List[List[Dict[str, str]]],
         answer: List[str],
         **kwargs
     ) -> List[float]:
@@ -243,8 +251,8 @@ class RewardFunctionManager:
         - -1.5: Cannot extract number
 
         Args:
-            prompts: List of prompts (unused, for compatibility)
-            completions: List of model-generated completions
+            prompts: List of prompt message lists
+            completions: List of completion message lists
             answer: List of expected answers
             **kwargs: Additional arguments (unused)
 
@@ -254,8 +262,11 @@ class RewardFunctionManager:
         rewards = []
 
         for i, (completion, expected) in enumerate(zip(completions, answer)):
+            # Extract content from message dict
+            response = completion[0]["content"]
+
             # Try to extract solution
-            match = self.solution_pattern.search(completion)
+            match = self.solution_pattern.search(response)
 
             if not match:
                 rewards.append(-1.5)

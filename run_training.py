@@ -173,8 +173,26 @@ class LLMFineTuningPipeline:
 
         logger.info("Processing GRPO dataset...")
         grpo_dataset, max_prompt_length, max_completion_length = (
-            data_processor.process_grpo_dataset(grpo_dataset, self.tokenizer)
+            data_processor.process_grpo_dataset(
+                grpo_dataset,
+                self.tokenizer,
+                prompt_manager.get_system_prompt()
+            )
         )
+
+        # Split into train and validation sets
+        train_dataset = grpo_dataset
+        eval_dataset = None
+
+        if self.config.grpo_training.eval_strategy != "no":
+            logger.info("Splitting dataset into train and validation...")
+            train_dataset, eval_dataset = data_processor.split_dataset(
+                grpo_dataset,
+                train_ratio=self.config.grpo_training.train_validation_split,
+                seed=self.config.model.random_state
+            )
+        else:
+            logger.info("Evaluation disabled - using full dataset for training")
 
         # Create reward functions
         reward_manager = create_reward_manager(
@@ -197,10 +215,11 @@ class LLMFineTuningPipeline:
         grpo_trainer.train(
             self.model,
             self.tokenizer,
-            grpo_dataset,
+            train_dataset,
             reward_functions,
             max_prompt_length,
-            max_completion_length
+            max_completion_length,
+            eval_dataset=eval_dataset
         )
 
         # Save GRPO checkpoint

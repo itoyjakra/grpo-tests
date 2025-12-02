@@ -1,3 +1,13 @@
 """Model evaluation and testing module."""
 
-__all__ = []
+from .evaluator import (
+    create_evaluator,
+    ReasoningEvaluator,
+    EvaluationMetrics,
+)
+
+__all__ = [
+    "create_evaluator",
+    "ReasoningEvaluator",
+    "EvaluationMetrics",
+]

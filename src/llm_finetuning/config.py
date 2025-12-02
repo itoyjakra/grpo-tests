@@ -162,6 +162,7 @@ class GRPOTrainingConfig:
         report_to: Experiment tracking backend
         eval_strategy: Evaluation strategy ('no', 'steps', 'epoch')
         eval_steps: Evaluate every N steps
+        train_validation_split: Ratio for train/validation split (0.0-1.0)
     """
     per_device_train_batch_size: int = 1
     gradient_accumulation_steps: int = 1
@@ -178,6 +179,7 @@ class GRPOTrainingConfig:
     report_to: str = "none"
     eval_strategy: str = "no"
     eval_steps: Optional[int] = None
+    train_validation_split: float = 0.9
 
 
 @dataclass
