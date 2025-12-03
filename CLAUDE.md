@@ -218,6 +218,68 @@ This is **expected** at the start of GRPO training. The model hasn't learned the
 - Step 20-50: -3.0 to 0.0 (partial format learning)
 - Step 50-100: 0.0 to +5.0 (format learned, improving answers)
 
+## Evaluation System
+
+### Overview
+
+The pipeline includes a comprehensive evaluation system that monitors model performance during GRPO training.
+
+### Enable Evaluation (Default: Enabled)
+
+Evaluation is configured in `configs/default_config.yaml`:
+
+```yaml
+grpo_training:
+  eval_strategy: "steps"          # Evaluate periodically
+  eval_steps: 20                  # Evaluate every 20 steps
+  train_validation_split: 0.9     # 90% train, 10% validation
+```
+
+### Evaluation Metrics
+
+During training, the system tracks:
+- **Format Accuracy**: Percentage of outputs with correct reasoning/solution tags
+- **Answer Accuracy**: Percentage of correct final answers
+- **Reasoning Present**: Percentage with reasoning content
+- **Avg Reasoning Length**: Average character count of reasoning sections
+- **Avg Total Reward**: Average reward from reward functions
+
+### Expected Metric Progression
+
+- **Step 0** (SFT baseline): Format ~85%, Answer ~50%, Reward ~4.0
+- **Mid-training** (Step 50): Format ~95%, Answer ~65%, Reward ~7.5
+- **End-training** (Step 100): Format ~98%, Answer ~70%, Reward ~9.0
+
+### How It Works
+
+1. Dataset automatically splits into 90% training / 10% validation
+2. Every `eval_steps`, model evaluated on validation set
+3. Metrics logged to console and `training.log`
+4. Compare Step 0 (SFT-only) vs final step (after GRPO) to measure improvement
+
+For detailed guidance, see `EVALUATION_GUIDE.md`.
+
+## Debugging Tools
+
+### Debug GRPO Generations
+
+If reward variance is zero or generations are identical, use the debug script:
+
+```bash
+uv run python debug_grpo.py
+```
+
+This script:
+- Loads the SFT checkpoint
+- Generates 5 completions with GRPO sampling settings
+- Checks for format tags and diversity
+- Helps diagnose issues with generation parameters
+
+Common issues diagnosed:
+- Temperature too low (generations too similar)
+- Missing format tags after SFT
+- Tokenization problems
+
 ## Testing and Debugging
 
 ### Verify Installation
@@ -227,6 +289,12 @@ uv run python check.py
 
 # Test module imports without training
 uv run python test_modules.py
+```
+
+### Test Evaluation System
+```bash
+# Verify evaluation metrics calculation
+uv run python test_evaluation.py
 ```
 
 ### Syntax Verification
