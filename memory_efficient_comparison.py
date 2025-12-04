@@ -1,5 +1,5 @@
 """
-Memory-efficient comparison script for base vs SFT models.
+Memory-efficient comparison script for base vs SFT vs third-party models.
 
 This script handles memory constraints by:
 1. Loading models sequentially (not simultaneously)
@@ -7,7 +7,7 @@ This script handles memory constraints by:
 3. Saving outputs to files for comparison
 
 Usage:
-    python memory_efficient_comparison.py
+    python memory_efficient_comparison.py [--third-model MODEL_NAME]
 
 Output:
     - comparison_results_TIMESTAMP.md: Human-readable markdown report
@@ -17,14 +17,15 @@ Output:
 import torch
 import gc
 import json
+import argparse
 from datetime import datetime
 from unsloth import FastLanguageModel
 
 # Configuration
 max_seq_length = 2048
-model_path = "optimization_sft_model_v2"
-# base_model_name = "unsloth/Qwen2.5-1.5B"
-base_model_name = "unsloth/Qwen3-4B-Base_sft_model_v2"
+model_path = "optimization_sft_model_14b"  # 14B SFT model
+base_model_name = "unsloth/Qwen3-4B-Base"  # 4B base model
+third_model_name = None  # Will be set via command line
 
 # Reasoning tags
 reasoning_start = "<start_working_out>"
